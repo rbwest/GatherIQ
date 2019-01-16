@@ -1,0 +1,74 @@
+html,
+body,
+#d3-sunburst {
+  overflow: hidden;
+  width: 100%;
+  height: 100%;
+}
+
+text {
+  font-family: "museo-sans";
+}
+
+.data-arc {
+  stroke: white;
+  stroke-width: 2px;
+}
+
+.d3-tip {
+  pointer-events: none !important;
+  background: white;
+  position: relative;
+  box-shadow: 0px 0px 4px 0px rgba(0, 0, 0, 0.2);
+  font-family: "museo-sans";
+  text-align: left;
+  white-space: nowrap;
+}
+
+.d3-tip-header {
+  font-size: 1.5em;
+  font-weight: 700;
+  color: #58595b;
+}
+
+.d3-tip-money {
+  font-size: 1.33em;
+  font-weight: 700;
+  color: #2eb437;
+}
+
+.d3-tip-text {
+  font-size: 1.33em;
+  font-weight: 400;
+  color: #58595b;
+}
+
+.total-text {
+  text-anchor: middle;
+  font-size: 1.67em;
+  font-weight: 400;
+  color: #58595b;
+}
+
+.total-sum-text {
+  text-anchor: middle;
+  font-size: 2.17em;
+  font-weight: 700;
+  color: #231f20;
+}
+
+.label-text {
+  alignment-baseline: hanging;
+  font-size: 1.33em;
+  font-weight: 400;
+  color: #58595b;
+}
+
+.label-line {
+  stroke: #58595b;
+  stroke-width: 2px;
+}
+
+#tooltip-tracker {
+  pointer-events: none;
+}

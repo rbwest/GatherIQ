@@ -1,0 +1,13 @@
+html,
+body,
+#d3-area {
+  overflow: hidden;
+  width: 100%;
+  height: 100%;
+}
+
+.data-line {
+  stroke-width: 4px;
+  stroke-linecap: round;
+  fill: none;
+}
