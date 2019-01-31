@@ -4,20 +4,29 @@ $(document).ready(function() {
   /******************************************************* Declare variables *******************************************************/
 
   // Data variables
-  const SVG_ID = "#d3-sunburst"; // ID of SVG element
+  const SVG_ID = "#d3-donut"; // ID of SVG element
   const DATA_MESSAGE = [
-    [2198, "No Poverty", "Commission to End Poverty"],
-    [1987, "Reduced Inequalities", "The LGBQT Alliance for Social Justice"],
-    [1827, "Zero Hunger", "Feed the World. Org"],
-    [1726, "Zero Hunger", "Commission to End Poverty"],
-    [2003, "Good Health and Well-Being", "A Healthier World"],
-    [1890, "Quality Education", "All Achieve Together"],
-    [267, "Quality Education", "Less Testing, More Talking"],
-    [2817, "Gender Equality", "The LGBQT Alliance for Social Justice"],
-    [11123, "Clean Water and Sanitation", "Safe Sanitation for All"],
-    [1203, "Affordable and Clean Energy", "Cleaner, Better, for the Future"],
-    [1928, "Affordable and Clean Energy", "Shine Bright For Solar"],
-    [1729, "Zero Hunger", "Healthy Tomorrows.Org"]
+    ["Total", "No Poverty", 1, 0.05],
+    ["Total", "Zero Hunger", 3, 0.15],
+    ["Total", "Good Health and Well-Being", 1, 0.05],
+    ["Total", "Quality Education", 1, 0.05],
+    ["Total", "Gender Equality", 2, 0.1],
+    ["Total", "Clean Water and Sanitation", 1, 0.05],
+    ["Total", "Affordable and Clean Energy", 5, 0.25],
+    ["Total", "Decent Work and Economic Growth", 0, 0],
+    ["Total", "Industry, Innovation, and Infrastructure", 5, 0.25],
+    ["Total", "Reduced Inequalities", 3, 0.15],
+    ["Total", "Sustainable Cities and Communities", 3, 0.15],
+    ["Total", "Responsible Consumption and Production", 1, 0.05],
+    ["Total", "Climate Action", 2, 0.1],
+    ["Total", "Life Below Water", 1, 0.05],
+    ["Total", "Life On Land", 2, 0.1],
+    ["Total", "Peace and Justice Strong Institutions", 4, 0.2],
+    ["Total", "Partnerships for the Goals", 1, 0.05],
+    ["Pending", "Decent Work and Economic Growth", 5, 0.25],
+    ["Pending", "Zero Hunger", 2, 0.1],
+    ["Pending", "Good Health and Well-Being", 6, 0.3],
+    ["Pending", "Life Below Water", 1, 0.05]
   ]; // Data message totals prior to last view, and donations since last view
   const GOALS = {
     "No Poverty": { color: "#e5243b", index: 1, abrev: "Poverty" },
@@ -82,44 +91,40 @@ $(document).ready(function() {
   // Static dimension variables
   const HOVER_TRANS_TIME = 250; //
   const EDGE_PADDING = 5; // Padding around exterior of chart
-  const LABEL_PADDING = 10; //
+  const PENDING_TEXT_PADDING = 10; //
   const NON_HOVER_OPACITY = 0.3; //
   const RADIUS_MAGNIFICATION_RATIO = 0.05;
   const ANGLE_MAGNIFICATION = 0.1;
+  const INNER_RADIUS_RATIO = 0.7;
 
   // Dynamic dimension variables
   let SVG_WIDTH = $(SVG_ID).width(); //
   let SVG_HEIGHT = $(SVG_ID).height(); //
   let RADIUS; // Radius of pie/donut
-  let TOTAL_SUM_HEIGHT; // Height of total sum text
-  let LABEL_HEIGHT; // Height of label texts
-  let SDG_LABEL_WIDTH; // Width of sdg label text
-  let RECIPIENT_LABEL_WIDTH; // Width of recipient label text
-  let MAX_LABEL_WIDTH; // Longer of two label widths
+  let FOCUS_TRANS_TIME = 1000; // Duration of arc becoming focused
+  let DELAY_TIME = 100; // Delay between transition steps
+  let DROP_IN_TRANS_TIME = 2500; // Duration of donation being dropped in
+  let PENDING_TEXT_HEIGHT;
 
   // Selection and d3 variables
-  d3.color.prototype.isDark = function() {
-    const luma = 0.2126 * this.r + 0.7152 * this.g + 0.0722 * this.b;
-    return luma < DARK_THRESHOLD;
-  };
   d3.selection.prototype.moveToFront = function() {
     return this.each(function() {
       this.parentNode.appendChild(this);
     });
   }; // Bring element to front of SVG (from https://github.com/wbkd/d3-extended)
-  const DOLLAR_FORMAT = d3.format("$,.2f"); //
-  const COLOR_SCALE = d3.scaleOrdinal(d3.schemeDark2); // Ordinal color scale as backup
+  const DOLLAR_FORMAT = d3.format("$.2f"); //
+  let TOTALS; // Total data extracted from data message
+  let PENDING; // Pending data extracted from data message
+  let NEW_TOTALS; // Total data with pending data added in
   let SVG; // SVG selection
   let TIP; // Tooltip generator
-  let G_CHART_AREA; // Chart area group selection
+  let G_CHART_AREA; // Path group selection
   let G_ARCS; // Arc group selection
   let ARC; // Arc generator to create arc paths from arc data
   let MAGNIFIED_ARC; // Arc generator to create magnified arc path
   let PIE; // Pie data generator
-  let NEST; // Nested data data
-  let ROOT; // Root of data hierarchy
-  let DESCENDANTS; // Descendants of data hierarchy in flat stucture
-  let LABEL_LINES; // Array of points to create label lines
+  let DATA; // Piefied totals
+  let ANIMATING = true; // Boolean to prevent tooltips during animation
   let LAST_TOUCHSTART;
 
   /*************************************************** Setup Callback Functions ***************************************************/
@@ -139,6 +144,37 @@ $(document).ready(function() {
 
   // Draw donut
   function draw() {
+    // Extract data from data message
+    TOTALS = DATA_MESSAGE.filter(function(d) {
+      return d[0] == "Total";
+    }).map(function(d, i) {
+      return {
+        key: d[1],
+        id: "arc" + i,
+        color: GOALS[d[1]].color,
+        index: GOALS[d[1]].index,
+        num_donations: d[2],
+        value: d[3] + 0.000001
+      };
+    });
+
+    PENDING = DATA_MESSAGE.filter(function(d) {
+      return d[0] == "Pending";
+    });
+
+    NEW_TOTALS = [];
+    let total;
+    for (let i = 0; i < TOTALS.length; i++) {
+      total = Object.assign({}, TOTALS[i]);
+      for (let j = 0; j < PENDING.length; j++) {
+        if (total.key == PENDING[j][1]) {
+          total.num_donations += PENDING[j][2];
+          total.value += PENDING[j][3];
+        }
+      }
+      NEW_TOTALS.push(total);
+    }
+
     // Select svg
     SVG = d3
       .select(SVG_ID)
@@ -148,16 +184,20 @@ $(document).ready(function() {
         d3.event.stopPropagation();
         d3.event.preventDefault();
 
-        // Unfocus bars
-        unfocusArcs();
+        // Skip animation, or unfocus unfocus arcs
+        if (ANIMATING) {
+          resize();
+        } else {
+          unfocusArcs();
+        }
       });
 
-    // Get height of ring labels
+    // Get height of pending donation text
     SVG.append("text")
-      .classed("label-text", true)
+      .classed("pending-donation-text", true)
       .text("TEXT")
       .each(function() {
-        LABEL_HEIGHT = this.getBBox().height;
+        PENDING_TEXT_HEIGHT = this.getBBox().height;
         this.remove();
       });
 
@@ -165,7 +205,10 @@ $(document).ready(function() {
     RADIUS =
       Math.min(
         SVG_WIDTH - 2 * EDGE_PADDING,
-        SVG_HEIGHT - 2 * EDGE_PADDING - 2 * LABEL_HEIGHT - LABEL_PADDING
+        SVG_HEIGHT -
+          2 * EDGE_PADDING -
+          PENDING_TEXT_HEIGHT -
+          PENDING_TEXT_PADDING
       ) / 2;
 
     // Append chart area group
@@ -188,6 +231,11 @@ $(document).ready(function() {
         d3.event.stopPropagation();
         d3.event.preventDefault();
 
+        // Prevent tooltips during animation
+        if (ANIMATING) {
+          return;
+        }
+
         // Unfocus arcs
         unfocusArcs();
       });
@@ -199,128 +247,78 @@ $(document).ready(function() {
       .attr("cy", 0)
       .attr("r", 1);
 
-    // Convert flat data into nested structure
-    NEST = d3
-      .nest()
-      .key(function(d) {
-        return d[1];
-      })
-      .key(function(d) {
-        return d[2];
-      })
-      .rollup(function(d) {
-        return d3.sum(d, function(d) {
-          return d[0];
-        });
-      })
-      .entries(DATA_MESSAGE);
-
-    // Get root of hierarchy created from nest
-    ROOT = d3
-      .hierarchy({ values: NEST }, function(d) {
-        return d.values;
-      })
-      .sum(function(d) {
-        return d.value;
-      });
-
-    // Partition hierarchy
-    d3.partition().size([2 * Math.PI, RADIUS])(ROOT);
-
-    // Get hierarchy descendants in flat data structure
-    DESCENDANTS = ROOT.descendants();
-
-    // Add ids, colors, and tooltip to descendants to simplify event listeners
-    for (
-      let i = 0, d = DESCENDANTS[i];
-      i < DESCENDANTS.length;
-      d = DESCENDANTS[++i]
-    ) {
-      if (d.depth) {
-        d.data.id = "arc" + i;
-        switch (d.depth) {
-          case 1:
-            d.data.color = GOALS[d.data.key].color;
-            d.data.tooltip =
-              "<table> <tr> <td class='d3-tip-header'> " +
-              GOALS[d.data.key].index +
-              " - " +
-              d.data.key +
-              "</td> </tr> <tr> <td> <span class='d3-tip-money'> " +
-              DOLLAR_FORMAT(d.value) +
-              "</span> <span class='d3-tip-text'> has been earned towards this SDG. </span> </td> </tr> </table>";
-            break;
-          case 2:
-            d.data.color = d3
-              .color(GOALS[d.parent.data.key].color)
-              .brighter(0.5)
-              .toString();
-            d.data.tooltip =
-              "<table> <tr> <td class='d3-tip-header'> " +
-              d.data.key +
-              "</td> </tr> <tr> <td> <span class='d3-tip-money'> " +
-              DOLLAR_FORMAT(d.value) +
-              "</span> <span class='d3-tip-text'> has been donated to this recipient. </span> </td> </tr> </table>";
-            break;
-        }
-      }
-    }
-
     // Create arc generators
     ARC = d3
       .arc()
       .startAngle(function(d) {
-        return d.x0;
+        return d.startAngle;
       })
       .endAngle(function(d) {
-        return d.x1;
+        return d.endAngle;
       })
       .innerRadius(function(d) {
-        return d.y0 - RADIUS_MAGNIFICATION_RATIO * RADIUS;
+        return (
+          INNER_RADIUS_RATIO * RADIUS - RADIUS_MAGNIFICATION_RATIO * RADIUS
+        );
       })
       .outerRadius(function(d) {
-        return d.y1 - RADIUS_MAGNIFICATION_RATIO * RADIUS;
+        return RADIUS - RADIUS_MAGNIFICATION_RATIO * RADIUS;
       });
 
     MAGNIFIED_ARC = d3
       .arc()
       .startAngle(function(d) {
-        return d.x0 - ANGLE_MAGNIFICATION;
+        return d.startAngle - ANGLE_MAGNIFICATION;
       })
       .endAngle(function(d) {
-        return d.x1 + ANGLE_MAGNIFICATION;
+        return d.endAngle + ANGLE_MAGNIFICATION;
       })
       .innerRadius(function(d) {
-        return d.y0 - 2 * RADIUS_MAGNIFICATION_RATIO * RADIUS;
+        return (
+          INNER_RADIUS_RATIO * RADIUS - 2 * RADIUS_MAGNIFICATION_RATIO * RADIUS
+        );
       })
       .outerRadius(function(d) {
-        return d.y1;
+        return RADIUS;
       });
+
+    // Create pie data generator
+    PIE = d3
+      .pie()
+      .sort(null)
+      .value(function(d) {
+        return d.value;
+      });
+
+    // Piefy data
+    DATA = PIE(TOTALS);
 
     // Create data arcs
     G_ARCS.selectAll(".data-arc")
-      .data(
-        ROOT.descendants().filter(function(d) {
-          return d.depth;
-        }),
-        function(d) {
-          return d.data.id;
-        }
-      )
+      .data(DATA, function(d) {
+        return d.data.key;
+      })
       .enter()
       .append("path")
-      .classed("data-arc", true)
       .attr("id", function(d) {
+        this.startAngle = d.startAngle;
+        this.endAngle = d.endAngle;
         return d.data.id;
       })
+      .classed("data-arc", true)
+      .attr("d", ARC)
       .attr("fill", function(d) {
         return d.data.color;
       })
-      .attr("d", ARC)
       .on("touchstart mouseover", function(d, i) {
         // Prevent event from falling through to underlying elements or causing scroll
         d3.event.stopPropagation();
         d3.event.preventDefault();
+
+        // Prevent tooltips during animation
+        if (ANIMATING) {
+          return;
+        }
 
         // Get currently magnified arc
         const magnifiedArc = d3.select(".focused");
@@ -338,9 +336,6 @@ $(document).ready(function() {
         // Focus touched arc
         focusArc(d);
 
-        // Update tooltip content
-        TIP.html(d.data.tooltip);
-
         // Move tooltip tracker to touch location
         moveTooltip(d);
       })
@@ -348,6 +343,11 @@ $(document).ready(function() {
         // Prevent event from falling through to underlying elements or causing scroll
         d3.event.stopPropagation();
         d3.event.preventDefault();
+
+        // Prevent tooltips during animation
+        if (ANIMATING || !LAST_TOUCHSTART) {
+          return;
+        }
 
         // Update last touchstart
         LAST_TOUCHSTART.moved = true;
@@ -364,23 +364,24 @@ $(document).ready(function() {
             ? null
             : magnifiedArc.datum();
 
-          // If moving to new tooltip, update tip content and focus hovered arc
+          // If moving to new tooltip, focus newly hovered arc
           if (
             !magnifiedArcData ||
             hoveredArcData.data.id != magnifiedArcData.data.id
           ) {
-            // Update tooltip content
-            TIP.html(hoveredArcData.data.tooltip);
-
-            // Focus touched arc
             focusArc(hoveredArcData);
           }
 
           // Move tooltip tracker to touch location
-          moveTooltip(d);
+          moveTooltip(hoveredArcData);
         }
       })
       .on("touchend", function() {
+        // Prevent tooltips during animation
+        if (ANIMATING || !LAST_TOUCHSTART) {
+          return;
+        }
+
         if (
           !LAST_TOUCHSTART.moved && // tap without drag &&
           LAST_TOUCHSTART.id == LAST_TOUCHSTART.magnifiedId // tapping already selected arc
@@ -405,113 +406,50 @@ $(document).ready(function() {
       .classed("total-sum-text", true)
       .text(
         DOLLAR_FORMAT(
-          d3.sum(
-            ROOT.descendants().filter(function(d) {
-              return d.depth == 1;
-            }),
-            function(d) {
-              return d.value;
-            }
-          )
+          d3.sum(TOTALS, function(d) {
+            return d.value;
+          })
         )
       );
 
-    // Append outer ring label (recipient)
+    // Append single text element representing all pending donations
     G_CHART_AREA.append("text")
-      .classed("label-text", true)
-      .classed("outer-label-text", true)
-      .text("Donation Recipient")
+      .classed("pending-donation-text", true)
+      .text(
+        "+" +
+          100 *
+            d3.sum(PENDING, function(d) {
+              return d[3];
+            }) +
+          "\u00A2"
+      )
       .attr(
         "transform",
-        "translate(" +
-          -SVG_WIDTH / 2 +
-          ", " +
-          (-RADIUS - LABEL_PADDING - 2 * LABEL_HEIGHT) +
+        "translate(0, " +
+          (-RADIUS - PENDING_TEXT_PADDING - PENDING_TEXT_HEIGHT) +
           ")"
-      )
-      .each(function() {
-        RECIPIENT_LABEL_WIDTH = this.getComputedTextLength();
-      });
-
-    // Append inner ring label (sdg)
-    G_CHART_AREA.append("text")
-      .classed("label-text", true)
-      .classed("inner-label-text", true)
-      .text("Sustainable Development Goal")
-
-      .attr(
-        "transform",
-        "translate(" +
-          -SVG_WIDTH / 2 +
-          ", " +
-          (-RADIUS - LABEL_PADDING - LABEL_HEIGHT) +
-          ")"
-      )
-      .each(function() {
-        SDG_LABEL_WIDTH = this.getComputedTextLength();
-        MAX_LABEL_WIDTH = Math.max(RECIPIENT_LABEL_WIDTH, SDG_LABEL_WIDTH);
-      });
-
-    // Append label lines
-    LABEL_LINES = [
-      {
-        x1: -SVG_WIDTH / 2 + RECIPIENT_LABEL_WIDTH + EDGE_PADDING,
-        x2: 0,
-        y1: -RADIUS - LABEL_PADDING - 1.6 * LABEL_HEIGHT,
-        y2: -RADIUS - LABEL_PADDING - 1.6 * LABEL_HEIGHT
-      }, // Top horizontal
-      {
-        x1: -SVG_WIDTH / 2 + SDG_LABEL_WIDTH + EDGE_PADDING,
-        x2: -LABEL_HEIGHT,
-        y1: -RADIUS - LABEL_PADDING - 0.6 * LABEL_HEIGHT,
-        y2: -RADIUS - LABEL_PADDING - 0.6 * LABEL_HEIGHT
-      }, // Bottom horizontal
-      {
-        x1: 0,
-        x2: 0,
-        y1: -RADIUS - LABEL_PADDING - 1.6 * LABEL_HEIGHT,
-        y2: -RADIUS + RADIUS_MAGNIFICATION_RATIO * RADIUS
-      }, // Top vertical
-      {
-        x1: -LABEL_HEIGHT,
-        x2: -LABEL_HEIGHT,
-        y1: -RADIUS - LABEL_PADDING - 0.6 * LABEL_HEIGHT,
-        y2: -ROOT.children[0].y1 + RADIUS_MAGNIFICATION_RATIO * RADIUS
-      } // Bottom vertical
-    ];
-
-    G_ARCS.selectAll(".label-line")
-      .data(LABEL_LINES)
-      .enter()
-      .append("line")
-      .classed("label-line", true)
-      .attr("x1", function(d) {
-        return d.x1;
-      })
-      .attr("x2", function(d) {
-        return d.x2;
-      })
-      .attr("y1", function(d) {
-        return d.y1;
-      })
-      .attr("y2", function(d) {
-        return d.y2;
-      });
+      );
   }
 
   // Resize chart elements
   function resize() {
+    // Interupt animation
+    ANIMATING = false;
+    SVG.selectAll("*").interrupt();
+
     // Hide tooltip
     TIP.hide();
 
     // Determine dimensions
     SVG_WIDTH = $(SVG_ID).width();
     SVG_HEIGHT = $(SVG_ID).height();
-
     RADIUS =
       Math.min(
         SVG_WIDTH - 2 * EDGE_PADDING,
-        SVG_HEIGHT - 2 * EDGE_PADDING - 2 * LABEL_HEIGHT - LABEL_PADDING
+        SVG_HEIGHT -
+          2 * EDGE_PADDING -
+          PENDING_TEXT_HEIGHT -
+          PENDING_TEXT_PADDING
       ) / 2;
 
     // Update chart area group
@@ -524,165 +462,250 @@ $(document).ready(function() {
         ")"
     );
 
-    // Get root of hierarchy created from nest
-    ROOT = d3
-      .hierarchy({ values: NEST }, function(d) {
-        return d.values;
-      })
-      .sum(function(d) {
-        return d.value;
-      });
-
-    // Partition hierarchy
-    d3.partition().size([2 * Math.PI, RADIUS])(ROOT);
-
-    // Get hierarchy descendants in flat data structure
-    DESCENDANTS = ROOT.descendants();
-
-    // Add ids, colors, and tooltip to descendants to simplify event listeners
-    for (
-      let i = 0, d = DESCENDANTS[i];
-      i < DESCENDANTS.length;
-      d = DESCENDANTS[++i]
-    ) {
-      if (d.depth) {
-        d.data.id = "arc" + i;
-        switch (d.depth) {
-          case 1:
-            d.data.color = GOALS[d.data.key].color;
-            d.data.tooltip =
-              "<table> <tr> <td class='d3-tip-header'> " +
-              GOALS[d.data.key].index +
-              " - " +
-              d.data.key +
-              "</td> </tr> <tr> <td> <span class='d3-tip-money'> " +
-              DOLLAR_FORMAT(d.value) +
-              "</span> <span class='d3-tip-text'> has been earned towards this SDG. </span> </td> </tr> </table>";
-            break;
-          case 2:
-            d.data.color = d3
-              .color(GOALS[d.parent.data.key].color)
-              .brighter(0.5)
-              .toString();
-            d.data.tooltip =
-              "<table> <tr> <td class='d3-tip-header'> " +
-              d.data.key +
-              "</td> </tr> <tr> <td> <span class='d3-tip-money'> " +
-              DOLLAR_FORMAT(d.value) +
-              "</span> <span class='d3-tip-text'> has been donated to this recipient. </span> </td> </tr> </table>";
-            break;
-        }
-      }
-    }
-
     // Update arc generators
     ARC = d3
       .arc()
       .startAngle(function(d) {
-        return d.x0;
+        return d.startAngle;
       })
       .endAngle(function(d) {
-        return d.x1;
+        return d.endAngle;
       })
       .innerRadius(function(d) {
-        return d.y0 - RADIUS_MAGNIFICATION_RATIO * RADIUS;
+        return (
+          INNER_RADIUS_RATIO * RADIUS - RADIUS_MAGNIFICATION_RATIO * RADIUS
+        );
       })
       .outerRadius(function(d) {
-        return d.y1 - RADIUS_MAGNIFICATION_RATIO * RADIUS;
+        return RADIUS - RADIUS_MAGNIFICATION_RATIO * RADIUS;
       });
 
     MAGNIFIED_ARC = d3
       .arc()
       .startAngle(function(d) {
-        return d.x0 - ANGLE_MAGNIFICATION;
+        return d.startAngle - ANGLE_MAGNIFICATION;
       })
       .endAngle(function(d) {
-        return d.x1 + ANGLE_MAGNIFICATION;
+        return d.endAngle + ANGLE_MAGNIFICATION;
       })
       .innerRadius(function(d) {
-        return d.y0 - 2 * RADIUS_MAGNIFICATION_RATIO * RADIUS;
+        return (
+          INNER_RADIUS_RATIO * RADIUS - 2 * RADIUS_MAGNIFICATION_RATIO * RADIUS
+        );
       })
       .outerRadius(function(d) {
-        return d.y1;
+        return RADIUS;
       });
+
+    // Move to updated data
+    DATA = PIE(NEW_TOTALS);
 
     // Update data arcs
     G_ARCS.selectAll(".data-arc")
-      .data(
-        ROOT.descendants().filter(function(d) {
-          return d.depth;
-        }),
-        function(d) {
-          return d.data.id;
-        }
-      )
+      .data(DATA, function(d) {
+        return d.data.key;
+      })
       .classed("focused", false)
       .attr("d", ARC)
       .style("opacity", 1);
 
-    // Update outer ring label (recipient)
-    G_CHART_AREA.select(".outer-label-text").attr(
-      "transform",
-      "translate(" +
-        -SVG_WIDTH / 2 +
-        ", " +
-        (-RADIUS - LABEL_PADDING - 2 * LABEL_HEIGHT) +
-        ")"
+    // Update total sum text
+    G_CHART_AREA.select(".total-sum-text").text(
+      DOLLAR_FORMAT(
+        d3.sum(DATA, function(d) {
+          return d.value;
+        })
+      )
     );
 
-    // Append inner ring label (sdg)
-    G_CHART_AREA.select(".inner-label-text").attr(
-      "transform",
-      "translate(" +
-        -SVG_WIDTH / 2 +
-        ", " +
-        (-RADIUS - LABEL_PADDING - LABEL_HEIGHT) +
-        ")"
+    // Remove pending donation text
+    G_CHART_AREA.select(".pending-donation-text").remove();
+
+    // Remove coins
+    SVG.selectAll(".coin-image").remove();
+  }
+
+  // Drop "coins" from single text object into donut representing all pending donations
+  function animate() {
+    // Add pending donations to appropriate categories
+    const updateTotals = [];
+    let donationTotal = 0;
+    let donation, entry;
+
+    // Determine number of coins from total donation
+    const numCoins = Math.floor(
+      d3.sum(PENDING, function(d) {
+        return d[3];
+      }) * 100
     );
 
-    // Append label lines
-    LABEL_LINES = [
-      {
-        x1: -SVG_WIDTH / 2 + RECIPIENT_LABEL_WIDTH + EDGE_PADDING,
-        x2: 0,
-        y1: -RADIUS - LABEL_PADDING - 1.6 * LABEL_HEIGHT,
-        y2: -RADIUS - LABEL_PADDING - 1.6 * LABEL_HEIGHT
-      }, // Top horizontal
-      {
-        x1: -SVG_WIDTH / 2 + SDG_LABEL_WIDTH + EDGE_PADDING,
-        x2: -LABEL_HEIGHT,
-        y1: -RADIUS - LABEL_PADDING - 0.6 * LABEL_HEIGHT,
-        y2: -RADIUS - LABEL_PADDING - 0.6 * LABEL_HEIGHT
-      }, // Bottom horizontal
-      {
-        x1: 0,
-        x2: 0,
-        y1: -RADIUS - LABEL_PADDING - 1.6 * LABEL_HEIGHT,
-        y2: -RADIUS + RADIUS_MAGNIFICATION_RATIO * RADIUS
-      }, // Top vertical
-      {
-        x1: -LABEL_HEIGHT,
-        x2: -LABEL_HEIGHT,
-        y1: -RADIUS - LABEL_PADDING - 0.6 * LABEL_HEIGHT,
-        y2: -ROOT.children[0].y1 + RADIUS_MAGNIFICATION_RATIO * RADIUS
-      } // Bottom vertical
-    ];
+    // Piefy updated data
+    DATA = PIE(NEW_TOTALS);
 
-    G_ARCS.selectAll(".label-line")
-      .data(LABEL_LINES)
-      .attr("x1", function(d) {
-        return d.x1;
+    // Append clip path
+    SVG.append("defs")
+      .append("clipPath")
+      .attr("id", "clip")
+      .append("rect")
+      .attr(
+        "transform",
+        "translate(0, " +
+          (-RADIUS - PENDING_TEXT_PADDING - PENDING_TEXT_HEIGHT) +
+          ")"
+      )
+      .attr(
+        "transform",
+        "translate(0, " +
+          (SVG_HEIGHT -
+            EDGE_PADDING -
+            2 * RADIUS -
+            PENDING_TEXT_PADDING -
+            PENDING_TEXT_HEIGHT) +
+          ")"
+      )
+      .attr("width", SVG_WIDTH)
+      .attr("height", PENDING_TEXT_HEIGHT + PENDING_TEXT_PADDING + RADIUS);
+
+    // Append coin images
+    SVG.selectAll(".coin-image")
+      .data(new Array(numCoins))
+      .enter()
+      .append("image")
+      .classed("coin-image", true)
+      .attr("xlink:href", "coin.PNG")
+      .attr("width", 40)
+      .attr("height", 40)
+      .attr("x", function() {
+        return SVG_WIDTH / 2 - 60 + Math.random() * 80;
       })
-      .attr("x2", function(d) {
-        return d.x2;
+      .attr(
+        "y",
+        SVG_HEIGHT -
+          EDGE_PADDING -
+          2 * RADIUS -
+          PENDING_TEXT_PADDING -
+          PENDING_TEXT_HEIGHT -
+          40
+      );
+
+    // Magnify relevant arcs
+    G_ARCS.selectAll(".data-arc")
+      .filter(function(d) {
+        return PENDING.find(function(element) {
+          return element[1] == d.data.key;
+        });
       })
-      .attr("y1", function(d) {
-        return d.y1;
+      .moveToFront()
+      .transition()
+      .duration(FOCUS_TRANS_TIME)
+      .attr("d", MAGNIFIED_ARC);
+
+    // Update donation text
+    G_CHART_AREA.select(".pending-donation-text")
+      .transition()
+      .delay(FOCUS_TRANS_TIME + DELAY_TIME)
+      .duration(DROP_IN_TRANS_TIME)
+      .tween("text", function() {
+        const that = d3.select(this);
+        const oldCostNum = that.text().slice(1, -1);
+        const newCostNum = 0;
+        const i = d3.interpolateNumber(oldCostNum, newCostNum);
+        return function(t) {
+          that.text("+" + parseInt(i(t)) + "\u00A2");
+        };
       })
-      .attr("y2", function(d) {
-        return d.y2;
+      .style("opacity", 0);
+
+    // Drop in coin images
+    SVG.selectAll(".coin-image")
+      .transition()
+      .delay(function(d, i) {
+        return (
+          FOCUS_TRANS_TIME +
+          DELAY_TIME +
+          (i / numCoins) * (DROP_IN_TRANS_TIME / 2)
+        );
       })
-      .moveToFront();
+      .duration(DROP_IN_TRANS_TIME / 2)
+      .attr("y", SVG_HEIGHT - RADIUS)
+      .style("opacity", 0)
+      .remove();
+
+    // Update arcs
+    G_ARCS.selectAll(".data-arc")
+      .data(DATA, function(d) {
+        return d.data.key;
+      })
+      .transition()
+      .delay(FOCUS_TRANS_TIME + DELAY_TIME)
+      .duration(DROP_IN_TRANS_TIME)
+      .attrTween("d", function(d) {
+        const orig = this;
+        if (
+          PENDING.find(function(element) {
+            return element[1] == d.data.key;
+          })
+        ) {
+          return arcTween(
+            d,
+            MAGNIFIED_ARC,
+            orig.startAngle,
+            d.startAngle,
+            orig.endAngle,
+            d.endAngle
+          );
+        } else {
+          return arcTween(
+            d,
+            ARC,
+            orig.startAngle,
+            d.startAngle,
+            orig.endAngle,
+            d.endAngle
+          );
+        }
+      });
+
+    // Update total sum text
+    G_CHART_AREA.select(".total-sum-text")
+      .transition()
+      .delay(FOCUS_TRANS_TIME + DELAY_TIME)
+      .duration(DROP_IN_TRANS_TIME)
+      .tween("text", function() {
+        const that = d3.select(this);
+        const oldCostNum = that.text().substring(1);
+        const newCostNum = d3.sum(NEW_TOTALS, function(d) {
+          return d.value;
+        });
+        const i = d3.interpolateNumber(oldCostNum, newCostNum);
+        return function(t) {
+          that.text(d3.format("$.2f")(i(t)));
+        };
+      });
+
+    // Remove magnification from relevant arc
+    G_ARCS.selectAll(".data-arc")
+      .transition()
+      .delay(FOCUS_TRANS_TIME + DELAY_TIME + DROP_IN_TRANS_TIME + DELAY_TIME)
+      .duration(FOCUS_TRANS_TIME)
+      .attr("d", ARC)
+      .on("end", function() {
+        ANIMATING = false;
+      });
+  }
+
+  // Tween function to create interpolators for arc segments
+  function arcTween(d, arc, origStart, finalStart, origEnd, finalEnd) {
+    const interpolateStart = d3.interpolate(origStart, finalStart);
+    const interpolateEnd = d3.interpolate(origEnd, finalEnd);
+    return function(t) {
+      return arc({
+        startAngle: interpolateStart(t),
+        endAngle: interpolateEnd(t),
+        innerRadius: d.innerRadius,
+        outerRadius: d.outerRadius
+      });
+    };
   }
 
   // Initialize tooltips
@@ -691,7 +714,19 @@ $(document).ready(function() {
       .tip()
       .attr("class", "d3-tip")
       .offset([-120, 0])
-      .html("Place Holder");
+      .html(function(d) {
+        return (
+          "<table> <tr> <td class='d3-tip-header'> " +
+          d.data.index +
+          " - " +
+          d.data.key +
+          "</td> </tr> <tr> <td> <span class='d3-tip-money'> " +
+          DOLLAR_FORMAT(d.value) +
+          "</span> <span class='d3-tip-text'> has been earned towards this SDG over " +
+          d.data.num_donations +
+          " donations. </span> </td> </tr> </table>"
+        );
+      });
 
     d3.select(this).call(TIP);
   }
@@ -706,19 +741,19 @@ $(document).ready(function() {
     const distX = touchX - centerX; // x distance between touch and donut center
     const distY = touchY - centerY; // y distance between touch and donut center
     const r = Math.hypot(distX, distY); // radius from touch to donut center
-    const angle = Math.atan2(-distX, distY) + Math.PI; // angle from donut center
 
-    for (
-      let i = 0, d = DESCENDANTS[i];
-      i < DESCENDANTS.length;
-      d = DESCENDANTS[++i]
+    if (
+      r > RADIUS - RADIUS_MAGNIFICATION_RATIO * RADIUS ||
+      r < INNER_RADIUS_RATIO * RADIUS - RADIUS_MAGNIFICATION_RATIO * RADIUS
     ) {
-      if (
-        d.depth && // not root
-        (angle > d.x0 && angle < d.x1) && // angle in range
-        (r > d.y0 && r < d.y1) // radius in range
-      ) {
-        return d;
+      return null;
+    } else {
+      let angle = Math.atan2(-distX, distY) + Math.PI;
+
+      for (let i = 0; i < DATA.length; i++) {
+        if (angle > DATA[i].startAngle && angle < DATA[i].endAngle) {
+          return DATA[i];
+        }
       }
     }
   }
@@ -735,16 +770,10 @@ $(document).ready(function() {
       .duration(HOVER_TRANS_TIME)
       .style("opacity", 1)
       .attr("d", ARC);
-
-    // Bring label lines to front
-    G_ARCS.selectAll(".label-line").moveToFront();
   }
 
   // Focus arc with given id and unfocus all others
   function focusArc(d) {
-    // Bring label lines to front
-    G_ARCS.selectAll(".label-line").moveToFront();
-
     // Magnify touched arc and bring opacity to 1
     G_ARCS.select("#" + d.data.id)
       .classed("focused", true)
@@ -804,4 +833,6 @@ $(document).ready(function() {
   }
 
   draw();
+
+  animate();
 });

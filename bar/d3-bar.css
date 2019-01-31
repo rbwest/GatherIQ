@@ -7,28 +7,6 @@ svg {
   height: 100%;
 }
 
-.data-line {
-  stroke: #1d9992;
-  stroke-width: 4px;
-  stroke-linecap: round;
-  fill: none;
-}
-
-.data-area {
-  fill: #21b9b7;
-  opacity: 0.7;
-  pointer-events: all;
-}
-
-.data-point {
-  cursor: pointer;
-  fill: #1c9f9d;
-}
-
-.data-rect {
-  opacity: 0;
-}
-
 .d3-tip {
   pointer-events: none !important;
   background: white;
@@ -37,6 +15,12 @@ svg {
   font-family: "museo-sans";
   text-align: left;
   white-space: nowrap;
+}
+
+.d3-tip-header {
+  font-size: 1.5em;
+  font-weight: 700;
+  color: #58595b;
 }
 
 .d3-tip-money {
@@ -51,7 +35,6 @@ svg {
   color: #58595b;
 }
 
-#tooltip-tracker {
-  opacity: 0;
+.data-image {
   pointer-events: none;
 }

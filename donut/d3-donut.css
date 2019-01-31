@@ -48,26 +48,27 @@ text {
   text-anchor: middle;
   font-size: 1.67em;
   font-weight: 400;
-  color: #58595b;
+  fill: #58595b;
 }
 
 .total-sum-text {
   text-anchor: middle;
   font-size: 2.17em;
   font-weight: 700;
-  color: #231f20;
+  fill: #231f20;
 }
 
-.label-text {
+.pending-donation-text {
+  text-anchor: middle;
   alignment-baseline: hanging;
-  font-size: 1.33em;
-  font-weight: 400;
-  color: #58595b;
+  font-size: 2.17em;
+  font-weight: 700;
+  fill: #2eb437;
 }
 
-.label-line {
-  stroke: #58595b;
-  stroke-width: 2px;
+.coin-image {
+  clip-path: url(#clip);
+  transform-origin: bottom center;
 }
 
 #tooltip-tracker {
