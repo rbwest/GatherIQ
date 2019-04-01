@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<!--
+Copyright 2018 SAS Institute Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+https://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
+<html>
+<head>
+
+  <!-- Import Museo Sans Font -->
+  <link rel="stylesheet" href="https://use.typekit.net/fjw8ddd.css">
+
+  <!-- Import jquery scripts -->
+  <script type="text/javascript" src="//code.jquery.com/jquery-1.11.0.min.js"></script>
+
+  <!-- Import d3 script -->
+  <script type="text/javascript" src="https://d3js.org/d3.v5.min.js"></script>
+
+  <!-- Import d3 line assets -->
+  <link rel="stylesheet" href="d3-line.css">
+  <script type="text/javascript" src="d3-line.js"></script>
+
+  <!-- Import utilities  -->
+  <script type="text/javascript" src="../util/messagingUtil.js"></script>
+  <script type="text/javascript" src="../util/contentUtil.js"></script>
+
+</head>
+<body>
+<span style="font-family: 'museo-sans'"></span> <!-- create element using font so it will be loaded before script executes -->
+<div id="d3-line-background">
+  <div class="text">
+    In the 1800s, 94% of the world lived in extreme poverty. By the 1990s, that number dropped to 30%.
+  </div>
+  <svg id="d3-line">
+  <div class="text">
+    Today, less than 10% of people suffer from extreme poverty. And the percentage continues to fall.
+  </div>
+</div>
+</svg>
+</body>
+</html>
